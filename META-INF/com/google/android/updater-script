@@ -14,12 +14,13 @@ setdefault devices off
 
 #Print
 ui_print " "
-
+#Get device info
+model=$(grep_cmdline androidboot.em.model)
 ui_print " _______________________________________________ "
 ui_print " |--|---------------------------------------|--| "
 ui_print " |--|           RayOS S21FE Port            |--| "
 ui_print " |--|---------------------------------------|--| "
-ui_print " |--|        for Samsung Galaxy A52s        |--| "
+ui_print " |--|        for $model with $chipname      |--| "
 ui_print " |--|---------------------------------------|--| "
 ui_print " |--|      by ShaDisNX255@XDADevelopers     |--| "
 ui_print " |--|---------------------------------------|--| "

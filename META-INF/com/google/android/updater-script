@@ -27,8 +27,6 @@ ui_print " |--|---------------------------------------|--| "
 ui_print " ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ "
 if [-f /sdcard/rayos_files/tmp.txt]
 #Installation
-
-
 then
    #Mount
    ui_print " Mounting partitions... "
@@ -253,46 +251,27 @@ then
    ui_print " ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ "
    rm -rf /sdcard/rayos_files/
 fi
+
 else
-
    ui_print " Installing Super image (step 1)... "
-
    #Mount
-
    ui_print " Unmounting all partitions... "
-
    umount_all
-
    ui_print " Installing August patch kernel... "
-
    update_zip boot.img $(find_block boot)
-
    ui_print " Installing ROM... "
-
    update_zip -xz super.img.xz $(find_block super)
-
    ui_print " Super img Installed. press any volume button     " 
-
    ui_print " to reboot to recovery, flash again and then      "
-
    ui_print " select the installation of RayOS Rom 2nd step    "
-
    ui_print " "
-
    ui_print " "
-
    ui_print " Press any volume button to continue... "
-
    cat "done" > /sdcard/rayos_files/tmp.txt
-
    if $yes; then
-
       run_program "$addons/reboot" recovery
-
    else
-
       run_program "$addons/reboot" recovery
-
    fi
 
 

@@ -218,7 +218,6 @@ else
       ui_print " ___________________________________________________ "
       ui_print " Do you want to add Samsung Free, Bixby and AR Stickers? "
       ui_print " ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ "
-      ui_print " Note: This is the last question I promise lol       "
       ui_print " ___________________________________________________ "
       ui_print " ---------Volume up = Yes | Volume down = No-------- "
       ui_print " ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ "
@@ -262,9 +261,34 @@ else
    set_metadata /vendor/etc/midas/SRIBMidas_aiBLURDETECT_Stage2_FP32_V130.caffemodel capabilities 0x0 selabel u:object_r:vendor_configs_file:s0
    set_metadata /vendor/etc/midas/SRIBMidas_aiDEBLUR_INT16_V0132_sm7325_snpe1502.dlc capabilities 0x0 selabel u:object_r:vendor_configs_file:s0
    set_metadata /vendor/etc/midas/midas_config.json capabilities 0x0 selabel u:object_r:vendor_configs_file:s0
-   #Unmount
+      else
+fi
+ui_print " ___________________________________________________ "
+      ui_print " Do you want to add Samsung Free, Bixby and AR Stickers? "
+      ui_print " ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ "
+      ui_print " Note: This is the last question I promise lol       "
+      ui_print " ___________________________________________________ "
+      ui_print " ---------Volume up = Yes | Volume down = No-------- "
+      ui_print " ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ "
+      if $yes; then
+      flash_zip log_name "extras/rise.zip" print
+
+      else
+fi
+      ui_print " ___________________________________________________ "
+      ui_print " Do you want to install magisk? "
+      ui_print " ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ "
+      ui_print " Note: This is the last question I promise lol       "
+      ui_print " ___________________________________________________ "
+      ui_print " ---------Volume up = Yes | Volume down = No-------- "
+      ui_print " ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ "
+      if $yes; then
+         flash_zip log_name "extras/magisk.zip" print
+      else
+#Unmount
    ui_print " Unmounting partitions... "
    umount_all
+fi
    #Finished
    ui_print " _______________________________________________ "
    ui_print " |--|---------------------------------------|--| "

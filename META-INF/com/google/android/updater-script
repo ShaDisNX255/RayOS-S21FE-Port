@@ -264,7 +264,7 @@ else
       else
 fi
 ui_print " ___________________________________________________ "
-      ui_print " Do you want to add Samsung Free, Bixby and AR Stickers? "
+      ui_print " do you want to flash rise kernel? "
       ui_print " ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ "
       ui_print " Note: This is the last question I promise lol       "
       ui_print " ___________________________________________________ "

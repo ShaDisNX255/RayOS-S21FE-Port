@@ -264,14 +264,14 @@ else
       else
 fi
 ui_print " ___________________________________________________ "
-      ui_print " do you want to flash rise kernel? "
+      ui_print " Do you want to flash Sixteen kernel? "
       ui_print " ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ "
-      ui_print " Note: This is the last question I promise lol       "
+      ui_print "      "
       ui_print " ___________________________________________________ "
       ui_print " ---------Volume up = Yes | Volume down = No-------- "
       ui_print " ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ "
       if $yes; then
-      flash_zip log_name "extras/rise.zip" print
+      flash_zip log_name "extras/kernel.zip" print
 
       else
 fi

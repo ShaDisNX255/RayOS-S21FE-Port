@@ -25,7 +25,8 @@ ui_print " |--|---------------------------------------|--| "
 ui_print " |--|      by ShaDisNX255@XDADevelopers     |--| "
 ui_print " |--|---------------------------------------|--| "
 ui_print " ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ "
-if [-f /sdcard/rayos_files/tmp.txt]
+FILE=/sdcard/rayos_files/tmp.txt
+if [ ! -f "$FILE" ]
 #Installation
 then
    ui_print " Installing Super image (step 1)... "

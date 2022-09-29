@@ -25,7 +25,7 @@ ui_print " |--|---------------------------------------|--| "
 ui_print " |--|      by ShaDisNX255@XDADevelopers     |--| "
 ui_print " |--|---------------------------------------|--| "
 ui_print " ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ "
-FILE=/sdcard/rayos_files/tmp.txt
+FILE=/sdcard/tmp.txt
 if [ ! -f "$FILE" ]
 #Installation
 then
@@ -43,7 +43,7 @@ then
    ui_print " "
    ui_print " "
    ui_print " Press any volume button to continue... "
-   cat "done" > /sdcard/rayos_files/tmp.txt
+   cat "done" > /sdcard/tmp.txt
    if $yes; then
       run_program "$addons/reboot" recovery
    else
@@ -272,6 +272,6 @@ else
    ui_print " |--| installed. Enjoy the ROM!             |--| "
    ui_print " |--|---------------------------------------|--| "
    ui_print " ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ "
-   rm -rf /sdcard/rayos_files/
+   rm -rf /sdcard/tmp.txt
 fi
 

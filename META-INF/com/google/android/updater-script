@@ -43,7 +43,7 @@ then
    ui_print " "
    ui_print " "
    ui_print " Press any volume button to continue... "
-   cat "done" > /sdcard/tmp.txt
+   echo 'done' > /sdcard/tmp.txt
    if $yes; then
       run_program "$addons/reboot" recovery
    else

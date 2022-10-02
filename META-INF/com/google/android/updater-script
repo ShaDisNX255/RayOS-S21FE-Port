@@ -30,14 +30,12 @@ if ! exist "$FILE"; then
    create_file "$FILE"
    ui_print " Installing Super image (step 1)... "
    #Mount
-   ui_print " Unmounting all partitions... "
-   umount_all
    ui_print " ___________________________________________________ "
       ui_print " Do you want to flash Sixteen kernel? "
       ui_print " ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ "
       ui_print "    this will keep magisk installed unlike default  "
       ui_print " ___________________________________________________ "
-      ui_print " ---------Volume up = Yes | Volume down = No-------- "
+      ui_print " ---------Volume up = Sixteen | Volume down = Stock- "
       ui_print " ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ "
     if $yes; then
     flash_zip log_name "kernel.zip" print

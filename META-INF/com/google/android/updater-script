@@ -44,13 +44,20 @@ if ! exist "$FILE"; then
     else
           ui_print " Installing September patch kernel... "
           update_zip boot.img $(find_ block boot)
+          sleep 5
    fi
    ui_print " Installing ROM... "
+   sleep 3
+   ui_print " This may take a few moments"
    update_zip -xz super.img.xz $(find_block super)
-   ui_print " Super img Installed. press any volume button     " 
+   ui_print " Super img Installed.    " 
+   sleep 3
    ui_print " to reboot to recovery, flash again and then      "
-   ui_print " select the installation of RayOS Rom 2nd step    "
-   ui_print " "
+   sleep 2
+   ui_print " RayOS Rom installation will automatically start"
+   sleep 2
+   ui_print " don't forget to flash again. "
+   sleep 3
    ui_print " "
    ui_print " Press any volume button to continue... "
    if $yes; then

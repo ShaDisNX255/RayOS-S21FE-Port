@@ -25,21 +25,9 @@ ui_print " |--|---------------------------------------|--| "
 ui_print " |--|      by ShaDisNX255@XDADevelopers     |--| "
 ui_print " |--|---------------------------------------|--| "
 ui_print " ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ "
-
-#Installation
-ui_print " ___________________________________________________ "
-ui_print " --------------Select ROM installation-------------- "
-ui_print " ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ "
-ui_print " Installation comes in 2 steps. First we must        "
-ui_print " install the super image and then we must reboot     "
-ui_print " the device and install the rest of the ROM.         "
-ui_print "                                                     "
-ui_print " Volume up = Install Super image                     "
-ui_print " Volume down = Install RayOS 2nd step                "
-ui_print " ___________________________________________________ "
-ui_print " -----Volume up = Super | Volume down = OS mods----- "
-ui_print " ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ "
-if $yes; then
+FILE=/sdcard/tmp.txt
+if ! exist "$FILE"; then
+   create_file "$FILE"
    ui_print " Installing Super image (step 1)... "
    #Mount
    ui_print " Unmounting all partitions... "
@@ -296,6 +284,7 @@ else
    set_metadata /vendor/etc/midas/SRIBMidas_aiBLURDETECT_Stage2_FP32_V130.caffemodel capabilities 0x0 selabel u:object_r:vendor_configs_file:s0
    set_metadata /vendor/etc/midas/SRIBMidas_aiDEBLUR_INT16_V0132_sm7325_snpe1502.dlc capabilities 0x0 selabel u:object_r:vendor_configs_file:s0
    set_metadata /vendor/etc/midas/midas_config.json capabilities 0x0 selabel u:object_r:vendor_configs_file:s0
+   delete "$FILE"
    #Unmount
    ui_print " Unmounting partitions... "
    umount_all

@@ -25,9 +25,21 @@ ui_print " |--|---------------------------------------|--| "
 ui_print " |--|      by ShaDisNX255@XDADevelopers     |--| "
 ui_print " |--|---------------------------------------|--| "
 ui_print " ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ "
-FILE=/sdcard/tmp.txt
-if ! exist "$FILE"; then
+
 #Installation
+ui_print " ___________________________________________________ "
+ui_print " --------------Select ROM installation-------------- "
+ui_print " ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ "
+ui_print " Installation comes in 2 steps. First we must        "
+ui_print " install the super image and then we must reboot     "
+ui_print " the device and install the rest of the ROM.         "
+ui_print "                                                     "
+ui_print " Volume up = Install Super image                     "
+ui_print " Volume down = Install RayOS 2nd step                "
+ui_print " ___________________________________________________ "
+ui_print " -----Volume up = Super | Volume down = OS mods----- "
+ui_print " ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ "
+if $yes; then
    ui_print " Installing Super image (step 1)... "
    #Mount
    ui_print " Unmounting all partitions... "
@@ -42,13 +54,11 @@ if ! exist "$FILE"; then
    ui_print " "
    ui_print " "
    ui_print " Press any volume button to continue... "
-   create_file "$FILE"
    if $yes; then
       run_program "$addons/reboot" recovery
    else
       run_program "$addons/reboot" recovery
    fi
-
 else
    #Mount
    ui_print " Mounting partitions... "
@@ -217,6 +227,7 @@ else
       ui_print " ___________________________________________________ "
       ui_print " Do you want to add Samsung Free, Bixby and AR Stickers? "
       ui_print " ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ "
+      ui_print " Note: This is the last question I promise lol       "
       ui_print " ___________________________________________________ "
       ui_print " ---------Volume up = Yes | Volume down = No-------- "
       ui_print " ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ "
@@ -238,30 +249,7 @@ else
          delete_recursive /system/priv-app/SystemUIBixby2
          delete_recursive /system/app/MinusOnePage
       fi
-   ui_print " Adding extra permissions to vendor files "
-   set_metadata /vendor/etc/VslMesDetector/MesDetectorBlur.tflite capabilities 0x0 selabel u:object_r:vendor_configs_file:s0
-   set_metadata /vendor/etc/VslMesDetector/MesDetectorLowlight.tflite capabilities 0x0 selabel u:object_r:vendor_configs_file:s0
-   set_metadata /vendor/etc/VslMesDetector/MesDetectorNoise.tflite capabilities 0x0 selabel u:object_r:vendor_configs_file:s0
-   set_metadata /vendor/etc/VslMesDetector/moire_detection.tflite capabilities 0x0 selabel u:object_r:vendor_configs_file:s0
-   set_metadata /vendor/etc/midas/SRIBMidas_aiDEBLUR_FP16_V0132.caffemodel capabilities 0x0 selabel u:object_r:vendor_configs_file:s0
-   set_metadata /vendor/etc/midas/SRIBMidas_aiDEBLUR_INT16_V0132_sm8350_snpe1502.dlc capabilities 0x0 selabel u:object_r:vendor_configs_file:s0
-   set_metadata /vendor/etc/midas/SRIBMidas_aiDENOISE_FP16_V900.caffemodel capabilities 0x0 selabel u:object_r:vendor_configs_file:s0
-   set_metadata /vendor/etc/midas/SRIBMidas_aiHDR_Global_INT16_V430_sm7325_snpe1502.dlc capabilities 0x0 selabel u:object_r:vendor_configs_file:s0
-   set_metadata /vendor/etc/midas/SRIBMidas_aiHDR_Global_INT16_V430_sm8350_snpe1502.dlc capabilities 0x0 selabel u:object_r:vendor_configs_file:s0
-   set_metadata /vendor/etc/midas/SRIBMidas_aiHDR_Local_INT16_V430_sm8350_snpe1502.dlc capabilities 0x0 selabel u:object_r:vendor_configs_file:s0
-   set_metadata /vendor/etc/midas/SRIBMidas_aiHDR_Local_INT16_V430_sm7325_snpe1502.dlc capabilities 0x0 selabel u:object_r:vendor_configs_file:s0
-   set_metadata /vendor/etc/midas/SRIBMidas_aiMOIREREMOVE_Coarse_FP32_V800.caffemodel capabilities 0x0 selabel u:object_r:vendor_configs_file:s0
-   set_metadata /vendor/etc/midas/SRIBMidas_aiMOIREREMOVE_Fine_FP32_V800.caffemodel capabilities 0x0 selabel u:object_r:vendor_configs_file:s0
-   set_metadata /vendor/etc/midas/SRIBMidas_aiUNIFIED_FP16_V610.caffemodel capabilities 0x0 selabel u:object_r:vendor_configs_file:s0
-   set_metadata /vendor/etc/midas/SRIB_aiHDR_Global_V430_1024.caffemodel capabilities 0x0 selabel u:object_r:vendor_configs_file:s0
-   set_metadata /vendor/etc/midas/SRIB_aiHDR_Local_V430_1024.caffemodel capabilities 0x0 selabel u:object_r:vendor_configs_file:s0
-   set_metadata /vendor/etc/midas/SRIBMidas_aiBLURDETECT_Stage1_FP32_V130.caffemodel capabilities 0x0 selabel u:object_r:vendor_configs_file:s0
-   set_metadata /vendor/etc/midas/SRIBMidas_aiBLURDETECT_Stage2_FP32_V130.caffemodel capabilities 0x0 selabel u:object_r:vendor_configs_file:s0
-   set_metadata /vendor/etc/midas/SRIBMidas_aiDEBLUR_INT16_V0132_sm7325_snpe1502.dlc capabilities 0x0 selabel u:object_r:vendor_configs_file:s0
-   set_metadata /vendor/etc/midas/midas_config.json capabilities 0x0 selabel u:object_r:vendor_configs_file:s0
-      else
-      fi
-      ui_print " ___________________________________________________ "
+          ui_print " ___________________________________________________ "
       ui_print " Do you want to flash Sixteen kernel? "
       ui_print " ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ "
       ui_print "      "
@@ -286,16 +274,36 @@ else
       else
          ui_print "skipping "
       fi
+   fi
+   ui_print " Adding extra permissions to vendor files "
+   set_metadata /vendor/etc/VslMesDetector/MesDetectorBlur.tflite capabilities 0x0 selabel u:object_r:vendor_configs_file:s0
+   set_metadata /vendor/etc/VslMesDetector/MesDetectorLowlight.tflite capabilities 0x0 selabel u:object_r:vendor_configs_file:s0
+   set_metadata /vendor/etc/VslMesDetector/MesDetectorNoise.tflite capabilities 0x0 selabel u:object_r:vendor_configs_file:s0
+   set_metadata /vendor/etc/VslMesDetector/moire_detection.tflite capabilities 0x0 selabel u:object_r:vendor_configs_file:s0
+   set_metadata /vendor/etc/midas/SRIBMidas_aiDEBLUR_FP16_V0132.caffemodel capabilities 0x0 selabel u:object_r:vendor_configs_file:s0
+   set_metadata /vendor/etc/midas/SRIBMidas_aiDEBLUR_INT16_V0132_sm8350_snpe1502.dlc capabilities 0x0 selabel u:object_r:vendor_configs_file:s0
+   set_metadata /vendor/etc/midas/SRIBMidas_aiDENOISE_FP16_V900.caffemodel capabilities 0x0 selabel u:object_r:vendor_configs_file:s0
+   set_metadata /vendor/etc/midas/SRIBMidas_aiHDR_Global_INT16_V430_sm7325_snpe1502.dlc capabilities 0x0 selabel u:object_r:vendor_configs_file:s0
+   set_metadata /vendor/etc/midas/SRIBMidas_aiHDR_Global_INT16_V430_sm8350_snpe1502.dlc capabilities 0x0 selabel u:object_r:vendor_configs_file:s0
+   set_metadata /vendor/etc/midas/SRIBMidas_aiHDR_Local_INT16_V430_sm8350_snpe1502.dlc capabilities 0x0 selabel u:object_r:vendor_configs_file:s0
+   set_metadata /vendor/etc/midas/SRIBMidas_aiHDR_Local_INT16_V430_sm7325_snpe1502.dlc capabilities 0x0 selabel u:object_r:vendor_configs_file:s0
+   set_metadata /vendor/etc/midas/SRIBMidas_aiMOIREREMOVE_Coarse_FP32_V800.caffemodel capabilities 0x0 selabel u:object_r:vendor_configs_file:s0
+   set_metadata /vendor/etc/midas/SRIBMidas_aiMOIREREMOVE_Fine_FP32_V800.caffemodel capabilities 0x0 selabel u:object_r:vendor_configs_file:s0
+   set_metadata /vendor/etc/midas/SRIBMidas_aiUNIFIED_FP16_V610.caffemodel capabilities 0x0 selabel u:object_r:vendor_configs_file:s0
+   set_metadata /vendor/etc/midas/SRIB_aiHDR_Global_V430_1024.caffemodel capabilities 0x0 selabel u:object_r:vendor_configs_file:s0
+   set_metadata /vendor/etc/midas/SRIB_aiHDR_Local_V430_1024.caffemodel capabilities 0x0 selabel u:object_r:vendor_configs_file:s0
+   set_metadata /vendor/etc/midas/SRIBMidas_aiBLURDETECT_Stage1_FP32_V130.caffemodel capabilities 0x0 selabel u:object_r:vendor_configs_file:s0
+   set_metadata /vendor/etc/midas/SRIBMidas_aiBLURDETECT_Stage2_FP32_V130.caffemodel capabilities 0x0 selabel u:object_r:vendor_configs_file:s0
+   set_metadata /vendor/etc/midas/SRIBMidas_aiDEBLUR_INT16_V0132_sm7325_snpe1502.dlc capabilities 0x0 selabel u:object_r:vendor_configs_file:s0
+   set_metadata /vendor/etc/midas/midas_config.json capabilities 0x0 selabel u:object_r:vendor_configs_file:s0
+   #Unmount
+   ui_print " Unmounting partitions... "
+   umount_all
    #Finished
    ui_print " _______________________________________________ "
    ui_print " |--|---------------------------------------|--| "
-   ui_print " |--| RayOS Rom has been successfully       |--| "
+   ui_print " |--| RS Rom has been successfully          |--| "
    ui_print " |--| installed. Enjoy the ROM!             |--| "
    ui_print " |--|---------------------------------------|--| "
    ui_print " ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ "
-   delete "$FILE"
-#Unmount
-   ui_print " Unmounting partitions... "
-   umount_all
 fi
-

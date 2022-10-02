@@ -26,9 +26,8 @@ ui_print " |--|      by ShaDisNX255@XDADevelopers     |--| "
 ui_print " |--|---------------------------------------|--| "
 ui_print " ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ "
 FILE=/sdcard/tmp.txt
-if [ ! -f "$FILE" ]
+if ! exist "$FILE"; then
 #Installation
-then
    ui_print " Installing Super image (step 1)... "
    #Mount
    ui_print " Unmounting all partitions... "
@@ -43,7 +42,7 @@ then
    ui_print " "
    ui_print " "
    ui_print " Press any volume button to continue... "
-   echo 'done' > /sdcard/tmp.txt
+   create_file "$FILE"
    if $yes; then
       run_program "$addons/reboot" recovery
    else
@@ -239,7 +238,6 @@ else
          delete_recursive /system/priv-app/SystemUIBixby2
          delete_recursive /system/app/MinusOnePage
       fi
-   fi
    ui_print " Adding extra permissions to vendor files "
    set_metadata /vendor/etc/VslMesDetector/MesDetectorBlur.tflite capabilities 0x0 selabel u:object_r:vendor_configs_file:s0
    set_metadata /vendor/etc/VslMesDetector/MesDetectorLowlight.tflite capabilities 0x0 selabel u:object_r:vendor_configs_file:s0
@@ -262,8 +260,8 @@ else
    set_metadata /vendor/etc/midas/SRIBMidas_aiDEBLUR_INT16_V0132_sm7325_snpe1502.dlc capabilities 0x0 selabel u:object_r:vendor_configs_file:s0
    set_metadata /vendor/etc/midas/midas_config.json capabilities 0x0 selabel u:object_r:vendor_configs_file:s0
       else
-fi
-ui_print " ___________________________________________________ "
+      fi
+      ui_print " ___________________________________________________ "
       ui_print " Do you want to flash Sixteen kernel? "
       ui_print " ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ "
       ui_print "      "
@@ -274,7 +272,8 @@ ui_print " ___________________________________________________ "
       flash_zip log_name "extras/kernel.zip" print
 
       else
-fi
+          ui_print "skipping "
+      fi
       ui_print " ___________________________________________________ "
       ui_print " Do you want to install magisk? "
       ui_print " ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ "
@@ -285,10 +284,8 @@ fi
       if $yes; then
          flash_zip log_name "extras/magisk.zip" print
       else
-#Unmount
-   ui_print " Unmounting partitions... "
-   umount_all
-fi
+         ui_print "skipping "
+      fi
    #Finished
    ui_print " _______________________________________________ "
    ui_print " |--|---------------------------------------|--| "
@@ -296,6 +293,9 @@ fi
    ui_print " |--| installed. Enjoy the ROM!             |--| "
    ui_print " |--|---------------------------------------|--| "
    ui_print " ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ "
-   rm -rf /sdcard/tmp.txt
+   delete "$FILE"
+#Unmount
+   ui_print " Unmounting partitions... "
+   umount_all
 fi
 

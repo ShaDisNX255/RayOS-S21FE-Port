@@ -70,6 +70,18 @@ binarch() { local byte=$(od -An -t x1 -j 4 -N 1 "$1" | tr -d " "); if [[ "$byte"
 
 reboot() { [ -f /system/bin/reboot ] && /system/bin/reboot "$@" || "$(which reboot)" "$@";}
 
+create_dir() { local dir return=0; for dir; do if [ ! -d "$dir" ]; then mkdir -p "$dir" 2>/dev/null; if [ -d "$dir" ]; then set_perm2 $di_uid $di_gid $di_perm_d "$dir" ; elif [ -e "$dir" ]; then echo2 "Already exist some reference called: $dir" && return=1; else testrw "$(dirname "$dir")" || return=1; echo2 "Cant create dir: $dir" && return=1; fi ; else testrw "$dir" || return=1; fi; done; return $return;  }
+
+create_file() { local file return=0; for file; do create_dir "$(dirname "$file")" || return 1; delete "$file"; touch "$file" 2>/dev/null; if [ -f "$file" ]; then set_perm2 $di_uid $di_gid $di_perm_f "$file" ; elif [ -e "$file" ]; then echo2 "Already exist some reference called: $file" && return=1; else echo2 "Cant create file: $file" && return=1; fi; done; return $return;  }
+
+testrw() { local test return=0; for test; do if [ -d "$test" ]; then touch "$test/.rw$$" 2>/dev/null; if [ -f "$test/.rw$$" ]; then delete "$test/.rw$$" ; else echo2 '!'"Read-Only: $test" && return=1; fi; else echo2 "Cant find: $test directory" ; fi; done; return $return; }
+
+testvarname() { echo "$@" | grep -Eq '^[a-zA-Z_$][a-zA-Z_$0-9]*$'; }
+
+encode_b64() { echo "$@" | base64; }
+
+run_b64() { local try0109191_=$(echo "$@" | base64 -d 2>/dev/null); is_text "$try0109191_" && eval "$try0109191_" || return 1 ; }
+
 ###################################
 #Common EDIFY extra references (For new users)
 
@@ -86,6 +98,10 @@ greater_than_int() { is_greater "$@"; }
 less_than_int() { is_less "$@"; }
 
 stdout() { "$@" 2>&1; }
+
+stderr() { "$@" 1>&2; }
+
+stdprint() { "$@" | while read print; do ui_print "$print"; done; } 
 
 #concat() { local con; for c; do con="${con}$($1 2>/dev/null || echo "$1")"; shift; done; [ -n "$con" ] && echo "$con" || return 1; }
 
@@ -202,32 +218,22 @@ undefined() {
 }
 
 copy() {
-   if ! $(cp -prf "$1" "$2" 2>/dev/null || [ ! -d "$(dirname "$2")" ] && mkdir -p "$(dirname "$2")"); then
-      if ! cp -prf "$1" "$2"; then
+   if ! $(create_dir "$(dirname "$2")" && cp -prf "$1" "$2" 2>/dev/null); then
          if [[ -d "$(dirname "$2")" && -z "$(ls -A "$(dirname "$2")")" ]]; then
             rm -rf "$(dirname "$2")"
-            return 1
-         else
-            return 1
          fi
-      else return 0
-      fi
+         return 1
    else return 0
    fi
 }
 
 move() {
-   if ! $(mv -f "$1" "$2" 2>/dev/null || [ ! -d "$(dirname "$2")" ] && mkdir -p "$(dirname "$2")"); then
-      if ! mv -f "$1" "$2"; then
+   if ! $(create_dir "$(dirname "$2")" && testrw "$(dirname "$1")" && mv -f "$1" "$2" 2>/dev/null); then
          if [[ -d "$(dirname "$2")" && -z "$(ls -A "$(dirname "$2")")" ]]; then
             rm -rf "$(dirname "$2")"
-            return 1
-         else
-            return 1
          fi
-      fi
-   else
-      return 0
+         return 1
+   else return 0
    fi
 }
 
@@ -543,6 +549,75 @@ convert_edify() {
    fi
 }
 
+multi_option() {
+   local end=$2
+   local i=0
+   [ -z "$1" ] && return 0
+   while true; do
+      i=$(($i+1))
+      if $yes; then ui_print "${n}Selected $i" && setdefault $1 $i && return $i
+      else ui_print "Skipped: $i"
+      fi
+      if is_number $end && is_greater_equal $i $end; then setdefault $1 ""; return 0; fi
+   done
+}
+
+obfuscate() {
+   local _obf_ _header_ _key_ _random_ _keys_ _orig_ _prev_ _native_
+   local restore flag b64=false
+   restore=()
+   while [[ $# -gt 0 ]]; do
+   flag="$1"
+   case $flag in
+       -base64|-b64)
+       b64=true
+       shift;
+       ;;
+       *)   
+       restore+=("$1")
+       shift
+       ;;
+   esac
+   done
+   set -- "${restore[@]}"
+   [ ! -z "$1" ] && _native_=$(echo "$1" | sed '/^[[:space:]]*#/d') || _native_=$(cat | sed '/^[[:space:]]*#/d')
+   if [ ! -z "$_native_" ]; then
+      if $b64; then
+         b64=$(echo "$_native_" | base64)
+         _native_="eval \"\$(echo \"$b64\" | base64 -d)\""
+      fi
+      _orig_="$_native_"; _prev_="$_native_"
+   else return 1
+   fi
+   while IFS= read _obf_; do
+      [ -z "$_obf_" ] && continue
+      _random_=$(echo $RANDOM | tr '[0-9]' '[a-z]' | tr -d "$_obf_")
+      _orig_=$(echo "$_orig_" | sed -Ee :1 -e 's/^(([^{]|\{[^{]*\})*)['"$_obf_"']/\1\$\{'"$_random_"'\}/;t1')
+      if [[ "$_orig_" != "$_prev_" ]]; then [ "$_obf_" != "\"" ] && _keys_+="$_random_=\"$_obf_\";" || _keys_+="$_random_=\\$_obf_;"; fi
+      _prev_="$_orig_"
+   done <<< $(echo "${_orig_}" | tr -d '${}' | grep -Eo '[[:print:]]|[[:space:]]' | sort -uf)
+   _orig_="eval \"$_orig_\""
+   for _obf_ in " " a e l v; do
+      _random_=$(echo "$_keys_" | tr ';' '\n' | grep -F "=\"$_obf_\"" | cut -d= -f1)
+      if [ -z "$_random_" ]; then _random_=$(echo $RANDOM | tr '[0-9]' '[a-z]' | tr -d "$_obf_"); _keys_+="$_random_=\"$_obf_\";"; fi
+      _orig_=$(echo "$_orig_" | sed -Ee :1 -e 's/^(([^{]|\{[^{]*\})*)['"$_obf_"']/\1\$\{'"$_random_"'\}/;t1')
+   done
+   case $_orig_ in
+      *$'\n'*)
+      _random_=$(echo $RANDOM | tr '[0-9]' '[a-z]')
+      _keys_+="$_random_=\$'\n';"
+      _orig_=$(echo "$_orig_" | sed '/^[[:space:]]*$/d')
+      _orig_=${_orig_//$'\n'/\$\{$_random_\}}
+      ;;
+      *);;
+   esac
+   if [[ "$_orig_" != "$_native_" ]]; then
+      _orig_=${_orig_//"\$\$"/\\\$\$}
+      echo "${_keys_}$_orig_"
+   else return 1
+   fi
+}
+
 abort() {
    ui_print "$@"
    umount_all
@@ -602,19 +677,49 @@ set_metadata() {
   local file i;
   file="$1";
   shift;
+  testrw "$(dirname "$file")" || return 1
   while [ "$2" ]; do
     case $1 in
       uid) chown $2 "$file";;
       gid) chown :$2 "$file";;
       mode) chmod $2 "$file";;
-      capabilities) twrp setcap "$file" $2;;
-      selabel)
-        chcon -h $2 "$file" || chcon $2 "$file";
-      ;;
+      capabilities) if [ -f "$(which twrp)" ]; then twrp setcap "$file" $2; else echo2 'Oops!  You can't apply "capabilities" without the "twrp" binary, don't mount /system! to use it'; fi ;;
+      selabel) ch_con $2 "$file";;
       *) ;;
     esac;
     shift 2;
   done;
+}
+
+set_metadata_recursive() {
+  local dir uid gid fmode dmode capabilities selabel twrp=false huh;
+  dir="$1";
+  shift;
+  testrw "$dir" || return 1
+  while [ "$2" ]; do
+    case $1 in
+      uid) uid=$2;;
+      gid) gid=$2;;
+      fmode) fmode=$2;;
+      dmode) dmode=$2;;
+      capabilities) capabilities=$2;;
+      selabel) selabel=$2;;
+      *) ;;
+    esac;
+    shift 2;
+  done;
+  if [ -n "$capabilities" ]; then [ -f "$(which twrp)" ] && twrp=true || echo2 'Oops!  You can't apply "capabilities" without the "twrp" binary, don't mount /system! to use it'; fi
+  [ -n "$uid" ] && chown -R $uid "$dir"
+  [ -n "$gid" ] && chown -R :$gid "$dir"
+  if [ -n "$fmode" ]; then
+     chmod -R $fmode "$dir"
+     find "$dir" -type l -exec chmod $fmode {} +;
+  fi
+  [ -n "$dmode" ] && find "$dir" -type d -exec chmod $dmode {} +;
+  find "$dir" -mindepth 1 | while read huh; do
+     $twrp && [ -n "$capabilities" ] && twrp setcap "$huh" $capabilities
+     [ -n "$selabel" ] && ch_con $selabel "$huh"
+  done
 }
 
 update_file() {
@@ -646,6 +751,7 @@ update_file() {
    file="$2"
    if [ ! -e "$file" ]; then echo "CANT FIND: $file" && return 1; fi
    if [ ! -e "$1" ]; then echo "CANT FIND: $1" && return 1; fi
+   testrw "$(dirname "$file")" || return 1
    start_tmp
    tmp="$TMP2/$(basename "$file")"
    cat "$file" > "$tmp"
@@ -662,7 +768,7 @@ update_file() {
 update_file_string() {
    local vars file array newprop prop propc xml result new old
    local restore flag d d2 huh tmp extract newprop2 backdir space space2 newspace nospace
-   local p
+   local p TMP2
    restore=()
    while [[ $# -gt 0 ]]; do
    flag="$1"
@@ -690,8 +796,10 @@ update_file_string() {
    array=( "$@" )
    file=${array[${#array[@]} - 1]}
    if [ ! -e "$file" ]; then echo "CANT FIND: $file" && return 1; fi
+   testrw "$(dirname "$file")" || return 1
    savestate old "$file"
-   tmp="$TMP/$(basename "$file")"
+   start_tmp 
+   tmp="$TMP2/$(basename "$file")"
    unset "array[${#array[@]}-1]"
    cat "$file" > "$tmp"
    if [ -n "$d" ]; then
@@ -760,7 +868,7 @@ update_file_string() {
    fi
    if ! is_valid "$tmp"; then echo2 " FATAL ERROR: Invalid $tmp " && return 1; fi
    inject "$tmp" "$(dirname "$file")"
-   rm -f "$tmp"
+   end_tmp 
    savestate new "$file"
    if [[ "$old" != "$new" ]]; then true; else false; fi
 }
@@ -856,6 +964,7 @@ force_update_file() {
    file="$2"
    if [ ! -e "$file" ]; then echo "CANT FIND: $file" && return 1; fi
    if [ ! -e "$1" ]; then echo "CANT FIND: $1" && return 1; fi
+   testrw "$(dirname "$file")" || return 1
    start_tmp
    tmp="$TMP2/$(basename "$file")"
    cat "$file" > "$tmp"
@@ -872,7 +981,7 @@ force_update_file() {
 force_update_file_string() {
    local vars file array newprop prop propc xml result old new
    local restore flag d d2 huh tmp extract newprop2 limit backdir space space2 newspace nospace
-   local p
+   local p TMP2
    restore=()
    while [[ $# -gt 0 ]]; do
    flag="$1"
@@ -900,8 +1009,10 @@ force_update_file_string() {
    array=( "$@" )
    file=${array[${#array[@]} - 1]}
    if [ ! -e "$file" ]; then echo "CANT FIND: $file" && return 1; fi
+   testrw "$(dirname "$file")" || return 1
    savestate old "$file"
-   tmp="$TMP/$(basename "$file")"
+   start_tmp 
+   tmp="$TMP2/$(basename "$file")"
    unset "array[${#array[@]}-1]"
    cat "$file" > "$tmp"
    if [ -n "$d" ]; then
@@ -979,7 +1090,7 @@ force_update_file_string() {
    fi
    if ! is_valid "$tmp"; then echo2 " FATAL ERROR: Invalid $tmp " && return 1; fi
    inject "$tmp" "$(dirname "$file")"
-   rm -f "$tmp"
+   end_tmp 
    savestate new "$file"
    if [[ "$old" != "$new" ]]; then true; else false; fi
 }
@@ -1047,23 +1158,33 @@ force_update_file_zip() {
 }
 
 flash() {
-	unzip -qp "$2" "META-INF/com/google/android/update-binary" > "$TMP/update-binary-test"
+    local fd
+    if [ "$3" == "print" ]; then fd=${OUTFD##*/}
+    else fd=3
+    fi
+    if ! is_zip "$2"; then echo2 "flash: $(basename "$2") isnt a ZIP!" && return 1; fi
+	(unzip -qp "$2" "META-INF/com/google/android/update-binary" > "$TMP/update-binary-test") 2>/dev/null
+    if ! is_valid "$TMP/update-binary-test"; then echo2 "flash: Empty binary: $(basename "$2") unsupported!" && return 1; fi
     chmod +x "$TMP/update-binary-test"
-    setdefault "$1" "$("$TMP/update-binary-test" 3 3 "$2" 2>&1)"
+    setdefault "$1" "$("$TMP/update-binary-test" "$fd" "$fd" "$2" 2>&1)"
+    if echo "$(checkvar "$1")" | grep -q "bad interpreter:"; then
+       setdefault "$1" "$(sh "$TMP/update-binary-test" "$fd" "$fd" "$2" 2>&1)"
+    fi
 }
 
 flash_addon() {
-   flash "$1" "$addons/$2"
+   flash "$1" "$addons/$2" "$3"
 }
 
 flash_zip() {
     package_extract_file "$2" "$TMP/$(basename "$2")"
-    flash "$1" "$TMP/$(basename "$2")"
+    flash "$1" "$TMP/$(basename "$2")" "$3"
     rm -f "$TMP/$(basename "$2")"
 }
 
 add_lines() { 
     local old new restore flag al al_add bl bl_add file tmp array lines i TMP2
+    local empty=false
     restore=()
     while [[ $# -gt 0 ]]; do
     flag="$1"
@@ -1087,7 +1208,8 @@ add_lines() {
     set -- "${restore[@]}"
     array=( "$@" )
     file=${array[${#array[@]} - 1]}
-    if [ ! -e "$file" ]; then echo "CANT FIND: $file" && return 1; fi
+    if [ ! -f "$file" ]; then create_file "$file" || return 1; else testrw "$(dirname "$file")" || return 1; fi
+    is_valid "$file" || empty=true
     unset "array[${#array[@]}-1]"
     start_tmp 
     tmp="$TMP2/$(basename "$file")"
@@ -1102,7 +1224,7 @@ add_lines() {
        add_lines_string -bl "${bl[i]}" "$(cat "${bl_add[i]}")" "$tmp"
     done
     savestate old "$file"
-    if ! is_valid "$tmp"; then echo2 " FATAL ERROR: Invalid $tmp" && return 1; fi
+    if ! is_valid "$tmp" && ! $empty; then echo2 " FATAL ERROR: Invalid $tmp" && return 1; fi
     inject "$tmp" "$(dirname "$file")"
     end_tmp
     savestate new "$file"
@@ -1112,6 +1234,7 @@ add_lines() {
 add_lines_string() {
     local vars file array lines restore flag get try
     local al al_add bl bl_add i old new
+    local empty=false TMP2 tmp
     restore=()
     while [[ $# -gt 0 ]]; do
     flag="$1"
@@ -1135,34 +1258,38 @@ add_lines_string() {
     set -- "${restore[@]}"
     array=( "$@" )
     file=${array[${#array[@]} - 1]}
-    if [ ! -e "$file" ]; then echo "CANT FIND: $file" && return 1; fi
+    if [ ! -f "$file" ]; then create_file "$file" || return 1; else testrw "$(dirname "$file")" || return 1; fi
+    is_valid "$file" || empty=true
     savestate old "$file"
     unset "array[${#array[@]}-1]"
-	cat "$file" > "$TMP/$(basename "$file")"
+    start_tmp 
+    tmp="$TMP2/$(basename "$file")"
+	cat "$file" > "$tmp"
 	for lines in "${array[@]}"; do
-	   echo "$lines" >> "$TMP/$(basename "$file")"
+	   echo "$lines" >> "$tmp"
 	done
     if [ -n "$al" ]; then
        for i in "${!al[@]}"; do
-          try=$(string -f "$TMP/$(basename "$file")" -after-line "${al[i]}" "${al_add[i]}")
-          [ -n "$try" ] && echo "$try" > "$TMP/$(basename "$file")"
+          try=$(string -f "$tmp" -after-line "${al[i]}" "${al_add[i]}")
+          [ -n "$try" ] && echo "$try" > "$tmp"
        done
     fi
     if [ -n "$bl" ]; then
        for i in "${!bl[@]}"; do
-          try=$(string -f "$TMP/$(basename "$file")" -before-line "${bl[i]}" "${bl_add[i]}")
-          [ -n "$try" ] && echo "$try" > "$TMP/$(basename "$file")"
+          try=$(string -f "$tmp" -before-line "${bl[i]}" "${bl_add[i]}")
+          [ -n "$try" ] && echo "$try" > "$tmp"
        done
     fi
-    if ! is_valid "$TMP/$(basename "$file")"; then echo2 " FATAL ERROR: Invalid $TMP/$(basename "$file") " && return 1; fi
-    inject "$TMP/$(basename "$file")" "$(dirname "$file")"
-    rm -f "$TMP/$(basename "$file")"
+    if ! is_valid "$tmp" && ! $empty; then echo2 " FATAL ERROR: Invalid $tmp " && return 1; fi
+    inject "$tmp" "$(dirname "$file")"
+    end_tmp 
     savestate new "$file"
     if [[ "$old" != "$new" ]]; then true; else false; fi
 }
 
 add_lines_addon() {
     local old new restore flag al al_add bl bl_add file tmp array lines i TMP2
+    local empty=false
     restore=()
     while [[ $# -gt 0 ]]; do
     flag="$1"
@@ -1186,7 +1313,8 @@ add_lines_addon() {
     set -- "${restore[@]}"
     array=( "$@" )
     file=${array[${#array[@]} - 1]}
-    if [ ! -e "$file" ]; then echo "CANT FIND: $file" && return 1; fi
+    if [ ! -f "$file" ]; then create_file "$file" || return 1; else testrw "$(dirname "$file")" || return 1; fi
+    is_valid "$file" || empty=true
     unset "array[${#array[@]}-1]"
     start_tmp 
     tmp="$TMP2/$(basename "$file")"
@@ -1201,7 +1329,7 @@ add_lines_addon() {
        add_lines_string -bl "${bl[i]}" "$(cat "$addons/${bl_add[i]}")" "$tmp"
     done
     savestate old "$file"
-    if ! is_valid "$tmp"; then echo2 " FATAL ERROR: Invalid $tmp" && return 1; fi
+    if ! is_valid "$tmp" && ! $empty; then echo2 " FATAL ERROR: Invalid $tmp" && return 1; fi
     inject "$tmp" "$(dirname "$file")"
     end_tmp
     savestate new "$file"
@@ -1210,6 +1338,7 @@ add_lines_addon() {
 
 add_lines_zip() {
     local old new restore flag al al_add bl bl_add file tmp array lines i TMP2
+    local empty=false
     restore=()
     while [[ $# -gt 0 ]]; do
     flag="$1"
@@ -1233,7 +1362,8 @@ add_lines_zip() {
     set -- "${restore[@]}"
     array=( "$@" )
     file=${array[${#array[@]} - 1]}
-    if [ ! -e "$file" ]; then echo "CANT FIND: $file" && return 1; fi
+    if [ ! -f "$file" ]; then create_file "$file" || return 1; else testrw "$(dirname "$file")" || return 1; fi
+    is_valid "$file" || empty=true
     unset "array[${#array[@]}-1]"
     start_tmp 
     tmp="$TMP2/$(basename "$file")"
@@ -1254,7 +1384,7 @@ add_lines_zip() {
        add_lines_string -bl "${bl[i]}" "$(cat "$TMP2/add.tmp")" "$tmp"
     done
     savestate old "$file"
-    if ! is_valid "$tmp"; then echo2 " FATAL ERROR: Invalid $tmp" && return 1; fi
+    if ! is_valid "$tmp" && ! $empty; then echo2 " FATAL ERROR: Invalid $tmp" && return 1; fi
     inject "$tmp" "$(dirname "$file")"
     end_tmp
     savestate new "$file"
@@ -1335,7 +1465,8 @@ set_context() {
    local context huh check="$1" check2="$2" contextback path dir ext try backdir
    if exist "$1"; then context=$(eval_context "$1"); else echo2 "set_context: Invalid line" && return 1; fi
    if defined context; then contextback="$context"; else echo2 "set_context: FATAL ERROR: Cant get context from $1" && return 1; fi
-   if ! exist file "$2" || exist folder "$2"; then 
+   if ! exist file "$2" || exist folder "$2"; then
+      testrw "$2" || return 1
       find -L "$2" \( -type f -o -type d -o -type l \) 2>/dev/null | while read huh; do
          dir=
          try=
@@ -1366,7 +1497,7 @@ set_context() {
    elif exist file "$2"; then
       ch_con $context "$2"
    else
-      echo2 "set_context: Invalid line"
+      echo2 "set_context: Invalid line" && return 1
    fi
 }
 
@@ -1395,7 +1526,7 @@ patch_fstab() {
    fstab=$(string force replace "$huh" "$3" "$fstab")
    if defined back fstab huh && [[ "$fstab" != "$back" ]]; then
       echo2 "patch_fstab: $huh to $3"
-      replace "$back" "$fstab" "$4"
+      replace "$back" "$fstab" "$4" || return 1
       savestate new "$4"
       if [[ "$stock" != "$new" ]]; then echo2 "patch_fstab: Patched $4" && return 0; else return 1; fi
    else
@@ -1404,14 +1535,17 @@ patch_fstab() {
 }
 
 import_config() {
-    local ugu propc
+    local ugu propc return=0
     while IFS='' read -r ugu || [[ -n "$ugu" ]]; do
           propc=
           test "${ugu#*=}" != "$ugu" && propc=1
           if [[ "$propc" == "1" ]]; then 
-              setdefault "$(split_extract = 1 "$ugu" | tr -d ' ')" "$(split_extract = 2 "$ugu")"
+              if testvarname "$(split_extract = 1 "$ugu" | tr -d ' ')"; then setdefault "$(split_extract = 1 "$ugu" | tr -d ' ')" "$(split_extract = 2 "$ugu")"
+              else echo2 "import_config: $(split_extract = 1 "$ugu" | tr -d ' ') cannot be converted to variable" && return=1
+              fi
           fi   
     done < "$1"
+    return $return
 }
 
 import_config_addon() {
@@ -1441,11 +1575,10 @@ savestate() {
 
 startlog() {
     setdefault logpath "$1"
-    echo > "$1"
-    if exist "$1"; then return 0; else return 1; fi
+    create_file "$1" || endlog
 }
 
-endlog() { unset logpath; }
+endlog() { logpath=; }
 
 savelog() {
     if [ -n "$logpath" ]; then
@@ -1473,6 +1606,7 @@ printlog() {
 symlink() {
   local file=$(fullpath "$1");
   while [ "$2" ]; do
+    testrw "$(dirname "$2")" || return 1
     ln -sf "$file" "$2";
     shift;
   done;
@@ -1484,6 +1618,7 @@ restore_con() {
 
 backup_files() {
   while [ "$1" ]; do
+    testrw "$(dirname "$1")" || return 1
     test ! -e "$1.bak" && cp -pf "$1" "$1.bak";
     shift;
   done;
@@ -1491,6 +1626,7 @@ backup_files() {
 
 restore_files() {
   while [ "$1" ]; do
+    testrw "$(dirname "$1")" || return 1
     mv -f "${1}.bak" "$1";
     shift;
   done;
@@ -1741,7 +1877,7 @@ make_zip() {
       echo2 "FATAL ERROR: Invalid type" && return 1
    fi
    echo2 "-- Making ZIP..."
-   if ! exist "$(dirname "$output")"; then mkdir -p "$(dirname "$output")"; fi
+   create_dir "$(dirname "$output")" || return 1
    ( cd "$make" && zip -r "$output" * ) > /dev/null
    cd "$current"
    delete_recursive "$make"
@@ -1786,6 +1922,7 @@ dynamic_install_apk() {
    set -- "${restore[@]}"
    delete "$TMP/userlist.txt"
    delete "$TMP/packages.txt"
+   if undefined out; then testrw "$2" || return 1; fi
    while read userlist; do
        if undefined userlist; then echo2 "dynamic_install_apk: Cant find any apk in $2 " && break; fi
        check_overlay=
@@ -1862,16 +1999,17 @@ dynamic_install_apk() {
 
 hex_patch() {
     local xxd 
-    if xxd --help >/dev/null; then
+    if xxd --help >/dev/null 2>&1; then
        xxd=xxd
-    elif /system/bin/xxd --help >/dev/null; then 
+    elif /system/bin/xxd --help >/dev/null 2>&1; then 
        xxd="/system/bin/xxd"
-    elif /system/bin/toybox xxd --help >/dev/null; then 
+    elif /system/bin/toybox xxd --help >/dev/null 2>&1; then 
        xxd="/system/bin/toybox xxd"
     elif [ ! -e "/data/adb/magisk/magiskboot" ]; then
        echo "CANT LOAD: xxd or magiskboot" && return 1
     fi
     if ! exist "$3"; then echo "CANT FIND: $3" && return 1; fi
+    testrw "$(dirname "$3")" || return 1
     if $(( $xxd -p "$3" | tr -d \\n | tr -d " " | sed "s/$1/$2/" | $xxd -r -p > "$3.tmp" ) 2>/dev/null ); then
       if hex_check "$2" "$3.tmp"; then
          mv -f "$3.tmp" "$3"
@@ -1899,11 +2037,11 @@ hex_patch() {
 hex_search() {
     local xxd restore flag
     local after before
-    if xxd --help >/dev/null; then
+    if xxd --help >/dev/null 2>&1; then
        xxd=xxd
-    elif /system/bin/xxd --help >/dev/null; then 
+    elif /system/bin/xxd --help >/dev/null 2>&1; then 
        xxd="/system/bin/xxd"
-    elif /system/bin/toybox xxd --help >/dev/null; then 
+    elif /system/bin/toybox xxd --help >/dev/null 2>&1; then 
        xxd="/system/bin/toybox xxd"
     else
        echo " CANT LOAD XXD bin" && return
@@ -1933,11 +2071,11 @@ hex_search() {
 
 hex_check() {
     local xxd
-    if xxd --help >/dev/null; then
+    if xxd --help >/dev/null 2>&1; then
        xxd=xxd
-    elif /system/bin/xxd --help >/dev/null; then 
+    elif /system/bin/xxd --help >/dev/null 2>&1; then 
        xxd="/system/bin/xxd"
-    elif /system/bin/toybox xxd --help >/dev/null; then 
+    elif /system/bin/toybox xxd --help >/dev/null 2>&1; then 
        xxd="/system/bin/toybox xxd"
     else
        echo " CANT LOAD XXD bin" && return
@@ -2043,19 +2181,23 @@ replace() {
    done
    set -- "${restore[@]}"
    file="$3"
+   [ -z "$file" ] && return 1
    if ! exist "$file"; then echo "CANT FIND: $file" && return 1; fi
    try="$1"
    rpl="$2"
    if [ -n "$r" ]; then
+       testrw "$file" || return 1
        while read huh; do
-           undefined huh && break
+           undefined huh && return 1
            dir=$(echo "$huh" | cut -f1 -d:)
+           testrw "$(dirname "$dir")" || return 1
            if [ -n "$a" ]; then
                load=$(string -f "$dir" replace_line "$try" "$rpl")
            else
                load=$(string -r -f "$dir" replace "$try" "$rpl")
            fi
-           if [ -n "$load" ]; then
+           result=$?
+           if [ $result == 0 ]; then
               if echo "$load" | grep -Fq "$(echo "$rpl" | grep -E "." | head -n1)"; then
                  echo "$load" > "$dir"
                  set_perm2 $di_uid $di_gid $di_perm_f "$dir"
@@ -2065,18 +2207,83 @@ replace() {
            fi
        done <<< $(grep -rn "$file" -e "$try")
    else
+       testrw "$(dirname "$file")" || return 1
        if [ -n "$a" ]; then
            load=$(string -f "$file" replace_line "$try" "$rpl")
        else
            load=$(string -r -f "$file" replace "$try" "$rpl")
        fi
-       if [ -n "$load" ]; then
+       result=$?
+       if [ $result == 0 ]; then
           if echo "$load" | grep -Fq "$(echo "$rpl" | grep -E "." | head -n1)"; then
              echo "$load" > "$file"
              set_perm2 $di_uid $di_gid $di_perm_f "$file"
           else echo2 "replace: Cant replace: \"$try\"  \"$rpl\" in $file" && return=1
           fi
        else echo2 "replace: Nothing to do: $(basename "$file")"
+       fi
+   fi
+   return $return
+}
+
+remove() {
+   local restore flag r a file try old new load return=0 cont=0 prev
+   restore=()
+   while [[ $# -gt 0 ]]; do
+   flag="$1"
+   case $flag in
+       -r|-recursive)
+       r=true
+       shift
+       ;;
+       -a|-all-line)
+       a=true
+       shift
+       ;;
+       *)   
+       restore+=("$1")
+       shift
+       ;;
+   esac
+   done
+   set -- "${restore[@]}"
+   file="$2"
+   [ -z "$file" ] && return 1
+   if ! exist "$file"; then echo "CANT FIND: $file" && return 1; fi
+   try="$1"
+   if [ -n "$r" ]; then
+       testrw "$file" || return 1
+       while read huh; do
+           undefined huh && return 1
+           dir=$(echo "$huh" | cut -f1 -d:)
+           if [[ -z "$try" && $cont -ge 1 && "$dir" == "$prev" ]] ; then continue; elif [[ "$dir" != "$prev" ]]; then cont=0; fi 
+           prev="$dir"
+           testrw "$(dirname "$dir")" || return 1
+           if [ -n "$a" ]; then
+               load=$(string -f "$dir" remove_line "$try")
+           else
+               load=$(string -r -f "$dir" remove "$try")
+           fi
+           result=$?
+           if [ $result == 0 ]; then
+              cont=$(($cont+1))
+              echo "$load" > "$dir"
+              set_perm2 $di_uid $di_gid $di_perm_f "$dir"
+           else echo2 "remove: Nothing to do: $(basename "$dir")"
+           fi
+       done <<< $(grep -rn "$file" -e "$try")
+   else
+       testrw "$(dirname "$file")" || return 1
+       if [ -n "$a" ]; then
+           load=$(string -f "$file" remove_line "$try")
+       else
+           load=$(string -r -f "$file" remove "$try")
+       fi
+       result=$?
+       if [ $result == 0 ]; then
+          echo "$load" > "$file"
+          set_perm2 $di_uid $di_gid $di_perm_f "$file"
+       else echo2 "remove: Nothing to do: $(basename "$file")"
        fi
    fi
    return $return
@@ -2093,7 +2300,7 @@ string() {
    local al al_add bl bl_add get aln aln_add bln bln_add 
    local p1 p2 r p file back return=0
    local ga gb
-   local force
+   local force rmm
    local fix='s/[]\/$*.^[]/\\&/g'
    restore=()
    while [[ $# -gt 0 ]]; do
@@ -2111,6 +2318,10 @@ string() {
        ;;
        remove)
        rm+=("$2")
+       shift;shift;
+       ;;
+       remove_line)
+       rmm+=("$2")
        shift;shift;
        ;;
        inside_symbol)
@@ -2229,6 +2440,14 @@ string() {
          string="${string//"${rm[i]}"/}"
       else
          string="${string/"${rm[i]}"/}"
+      fi
+   done
+   for i in "${!rmm[@]}"; do
+      try=$(echo "${rmm[i]}" | sed -e $fix)
+      if [ -n "$try" ]; then
+         string=$(echo "$string" | sed -e "/$try/d")
+      else
+         string=$(echo "$string" | sed -e "/^[[:space:]]*$/d")
       fi
    done
    if [ -n "$al" ]; then
@@ -2606,13 +2825,21 @@ run_wait() {
 }
 
 run_jar() {
-    local dalvikvm file main 
+    local dalvikvm file main logpath
     #Inspired in the osm0sis method
     if dalvikvm -showversion >/dev/null; then
        dalvikvm=dalvikvm
     elif /system/bin/dalvikvm -showversion >/dev/null; then 
        dalvikvm=/system/bin/dalvikvm
     else
+       if [ -e "/system/bin/dalvikvm" ]; then
+          echo2 "Saving log: /sdcard/DI_DALVIKVM.log" 
+          startlog /sdcard/DI_DALVIKVM.log
+          savelog "--------DALVIKVM LOGGING--------"
+          savelog "$(/system/bin/dalvikvm -Xuse-stderr-logger -verbose:class,collector,compiler,deopt,gc,heap,interpreter,jdwp,jit,jni,monitor,oat,profiler,signals,simulator,startup,threads,verifier,verifier-debug,image,systrace-locks,plugin,agents,dex -showversion 2>&1)"
+          savelog "--------------------------------"
+          endlog
+       fi
        echo "CANT LOAD DALVIKVM " && return 1
     fi
     file="$1"
@@ -2621,7 +2848,7 @@ run_jar() {
        echo "Cant get main: $file " && return 1
     fi
     shift 1
-    $dalvikvm -Djava.io.tmpdir=. -Xnodex2oat -Xnoimage-dex2oat -cp "$file" $main "$@" 2>/dev/null \ || $dalvikvm -Djava.io.tmpdir=. -Xnoimage-dex2oat -cp "$file" $main "$@"
+    $dalvikvm -Djava.io.tmpdir=. -Xnodex2oat -Xnoimage-dex2oat -cp "$file" $main "$@" 2>/dev/null \ || $dalvikvm -Djava.io.tmpdir=. -Xnoimage-dex2oat -cp "$file" $main "$@" || $dalvikvm -Xuse-stderr-logger -Djava.io.tmpdir=. -Xnoimage-dex2oat -cp "$file" $main "$@"
 }
 
 run_jar_addon() {
@@ -2643,13 +2870,21 @@ run_jar_zip() {
 }
 
 run_jar_class() {
-    local dalvikvm file main class
+    local dalvikvm file main class logpath
     #Inspired in the osm0sis method
     if dalvikvm -showversion >/dev/null; then
        dalvikvm=dalvikvm
     elif /system/bin/dalvikvm -showversion >/dev/null; then 
        dalvikvm=/system/bin/dalvikvm
     else
+       if [ -e "/system/bin/dalvikvm" ]; then
+          echo2 "Saving log: /sdcard/DI_DALVIKVM.log" 
+          startlog /sdcard/DI_DALVIKVM.log
+          savelog "--------DALVIKVM LOGGING--------"
+          savelog "$(/system/bin/dalvikvm -Xuse-stderr-logger -verbose:class,collector,compiler,deopt,gc,heap,interpreter,jdwp,jit,jni,monitor,oat,profiler,signals,simulator,startup,threads,verifier,verifier-debug,image,systrace-locks,plugin,agents,dex -showversion 2>&1)"
+          savelog "--------------------------------"
+          endlog
+       fi
        echo "CANT LOAD DALVIKVM " && return 1
     fi
     file="$1"
@@ -2658,7 +2893,7 @@ run_jar_class() {
        echo "Class undefined: $file " && return 1
     fi
     shift 2
-    $dalvikvm -Djava.io.tmpdir=. -Xnodex2oat -Xnoimage-dex2oat -cp "$file" $class "$@" 2>/dev/null \ || $dalvikvm -Djava.io.tmpdir=. -Xnoimage-dex2oat -cp "$file" $class "$@"
+    $dalvikvm -Djava.io.tmpdir=. -Xnodex2oat -Xnoimage-dex2oat -cp "$file" $class "$@" 2>/dev/null \ || $dalvikvm -Djava.io.tmpdir=. -Xnoimage-dex2oat -cp "$file" $class "$@" || $dalvikvm -Xuse-stderr-logger -Djava.io.tmpdir=. -Xnoimage-dex2oat -cp "$file" $class "$@"
 }
 
 run_jar_class_addon() {
@@ -2919,6 +3154,7 @@ xml_kit() {
    fi
    if [ -n "$result" ]; then
       if [ -z "$print" ]; then
+         testrw "$(dirname "$backdir")" || return 1
          echo "$result" > "$backdir"
          if is_valid "$backdir"; then set_perm2 $di_uid $di_gid $di_perm_f "$backdir"
          else echo2 "xml_kit: Cant write $backdir" && return 1
@@ -3093,9 +3329,8 @@ dynamic_apktool() {
             if [ ! -e "$folder/try.zp" ]; then echo "ERROR: zipalign $outfile" && return 1; fi
             mv -f "$folder/try.zp" "$folder/try.apk"
          fi
-         if [[ -n "$move" && ! -d "$(dirname "$move")" ]]; then mkdir -p "$(dirname "$move")"; fi
          if [ -n "$move" ]; then
-            cp -pf "$folder/try.apk" "$move"
+            copy "$folder/try.apk" "$move"
             if is_valid "$move"; then
                rm -f "$folder/try.apk"
                echo " L: Success $(basename "$move")" && return 0
@@ -3155,7 +3390,7 @@ find_apk() {
    array=( "$@" )
    path=${array[${#array[@]} - 1]}
    unset "array[${#array[@]}-1]"
-   while read userlist; do
+   find -L "$path" -type f -name "*.apk" | while read userlist; do
        if undefined userlist; then echo "find_apk: Cant find any apk in $path " && return 1; fi
        package=
        package=$(apk_package "$userlist")
@@ -3163,29 +3398,36 @@ find_apk() {
           echo "$userlist" >> "$TMP/userlist.txt"
           echo "$(basename "$userlist")=$package" >> "$TMP/packages.txt"
        fi
-   done <<< $(find -L "$path" -type f -name "*.apk")
+   done
    for try in "${array[@]}"; do
      while read try2; do
         undefined try2 && continue
         package=
         package=$(get_file_prop "$TMP/packages.txt" "$try2")
         check=$(grep -m1 "$try2" "$TMP/userlist.txt")
-        check_split=$(aapt dump badging "$check" | sed -n "s/.* split='\([^']*\).*$/\1/p")
-        check_overlay=$(aapt dump xmlstrings "$check" AndroidManifest.xml | grep -w " overlay")
-        if [ -z "$re" ]; then
-           if [[ -z "$splits" && -z "$overlays" ]]; then
-              if [[ -z "$check_split" && -z "$check_overlay" && "$package" == "$try" ]]; then echo "$(grep -m1 "$try2" "$TMP/userlist.txt")" && return=0 && count=$(( $count + 1 )); fi;
-           elif [ -n "$splits" ]; then
-              if [[ -z "$check_overlay" && "$package" == "$try" ]]; then echo "$(grep -m1 "$try2" "$TMP/userlist.txt")" && return=0 && count=$(( $count + 1 )); fi;
-           elif [ -n "$overlays" ]; then
-              if [[ -z "$check_split" && "$package" == "$try" ]]; then echo "$(grep -m1 "$try2" "$TMP/userlist.txt")" && return=0 && count=$(( $count + 1 )); fi;
-           else
-              if [[ "$package" == "$try" ]]; then echo "$(grep -m1 "$try2" "$TMP/userlist.txt")" && return=0 && count=$(( $count + 1 )); fi;
+        check_split=$(aapt dump badging "$check" | sed -n "s/.* split='\([^']*\).*$/\1/p" 2>/dev/null)
+        check_overlay=$(aapt dump xmlstrings "$check" AndroidManifest.xml | grep -w " overlay" 2>/dev/null)
+        result=$(grep -m1 "$try2" "$TMP/userlist.txt")
+        if [ -z "$re" ] && [ -n "$result" ]; then
+           if [[ -z "$splits" && -z "$overlays" && -z "$check_split" && -z "$check_overlay" && "$package" == "$try" ]]; then
+              echo "$result" && return=0 && count=$(( $count + 1 ))
+           elif [[ -n "$splits" && -z "$overlays" && -z "$check_overlay" && "$package" == "$try" ]]; then
+              echo "$result" && return=0 && count=$(( $count + 1 ))
+           elif [[ -n "$overlays" && -z "$splits" && -z "$check_split" && "$package" == "$try" ]]; then
+             echo "$result" && return=0 && count=$(( $count + 1 ))
+           elif [[ -n "$splits" && -n "$overlays" && "$package" == "$try" ]]; then
+             echo "$result" && return=0 && count=$(( $count + 1 ))
            fi
-        else
-           result=
-           result=$(grep -m1 "$try2" "$TMP/userlist.txt")
-           if [ -n "$result" ]; then echo "$result" && return=0 && count=$(( $count + 1 )); fi
+        elif [ -n "$result" ]; then
+           if [[ -z "$splits" && -z "$overlays" && -z "$check_split" && -z "$check_overlay" ]]; then
+              echo "$result" && return=0 && count=$(( $count + 1 ))
+           elif [[ -n "$splits" && -z "$overlays" && -z "$check_overlay" ]]; then
+              echo "$result" && return=0 && count=$(( $count + 1 ))
+           elif [[ -n "$overlays" && -z "$splits" && -z "$check_split" ]]; then
+             echo "$result" && return=0 && count=$(( $count + 1 ))
+           elif [[ -n "$splits" && -n "$overlays" ]]; then
+             echo "$result" && return=0 && count=$(( $count + 1 ))
+           fi
         fi
         if [[ -n "$limit" && "$limit" == "$count" ]]; then break; fi
      done <<< $(grep "$try" "$TMP/packages.txt" | cut -d '=' -f1)
@@ -3196,8 +3438,234 @@ find_apk() {
 apk_package() {
    local package
    if ! aapt version >/dev/null; then echo " CANT LOAD AAPT: U cant use apk_package " && return 1; fi
-   package=$(aapt dump badging "$1" | sed -n "s/.*package: name='\([^']*\).*$/\1/p" 2>/dev/null)
+   package=$((aapt dump badging "$1" | sed -n "s/.*package: name='\([^']*\).*$/\1/p") 2>/dev/null)
    if [ -n "$package" ]; then echo "$package"; else return 1; fi
+}
+
+apk_main() {
+   local main
+   if ! aapt version >/dev/null; then echo " CANT LOAD AAPT: U cant use apk_main " && return 1; fi
+   main=$((aapt dump badging "$1" | sed -n "s/.*launchable-activity: name='\([^']*\).*$/\1/p") 2>/dev/null)
+   if [ -n "$main" ]; then echo "$main"; else return 1; fi
+}
+
+apk_icon() {
+   local icon
+   if ! aapt version >/dev/null; then echo " CANT LOAD AAPT: U cant use apk_package " && return 1; fi
+   icon=$((aapt dump badging "$1" | sed -n "s/.*application:.*icon='\([^']*\).*$/\1/p") 2>/dev/null)
+   if [ -n "$icon" ]; then echo "$icon"; else return 1; fi
+}
+
+apk_launch() {
+   local pkg main
+   if [ ! -f "$(which am)" ]; then echo " CANT LOAD AM: U cant use apk_launch, try mounting /system" && return 1; fi
+   [ -f "$1" ] && pkg=$(apk_package "$1") || pkg="$1"
+   [ -z "$2" ] && main=$(apk_main "$1") || main="$2"
+   if [ -z "$pkg" ]; then echo2 "apk_launch: Cant get the package of $1" && return 1; fi
+   if [ -z "$main" ]; then echo2 "apk_launch: Cant get the main launchable activity of $1" && return 1; fi
+   am start -n "$pkg/$main"
+}
+
+get_density_key() {
+   if is_greater_equal "$1" 120 && is_less "$1" 160; then
+      echo ldpi
+   #elif is_greater_equal "$1" 213 && is_less "$1" 240; then
+   #   echo tvdpi
+   elif is_greater_equal "$1" 160 && is_less "$1" 240; then
+      echo mdpi
+   elif is_greater_equal "$1" 240 && is_less "$1" 320; then
+      echo hdpi
+   elif is_greater_equal "$1" 320 && is_less "$1" 480; then
+      echo xhdpi
+   elif is_greater_equal "$1" 480 && is_less "$1" 640; then
+      echo xxhdpi
+   elif is_greater_equal "$1" 640; then
+      echo xxxhdpi
+   elif [[ "$1" == 0 ]]; then
+      echo nodpi
+   fi
+}
+
+get_density_int() {
+   if [[ "$1" == "ldpi" ]]; then
+      echo 120
+   elif [[ "$1" == "mdpi" ]]; then
+      echo 160
+   elif [[ "$1" == "tvdpi" ]]; then
+      echo 213
+   elif [[ "$1" == "hdpi" ]]; then
+      echo 240
+   elif [[ "$1" == "xhdpi" ]]; then
+      echo 320
+   elif [[ "$1" == "xxhdpi" ]]; then
+      echo 480
+   elif [[ "$1" == "xxxhdpi" ]]; then
+      echo 640
+   elif [[ "$1" == "nodpi" ]]; then
+      #Any dpi
+      echo 0
+   elif is_number $1; then
+      echo $1
+   fi
+}
+
+apk_install() {
+   local split apk count success=true try
+   local size total id TMP2 lang density support dp dp_support install archi_support archi get new
+   #if ! pm help >/dev/null; then echo " CANT LOAD PM: U cant use apk_install " && return 1; fi
+   TMP2="/data/local/tmp/apk_install"
+   create_dir "$TMP2" || return 1
+   while [ "$1" ]; do
+     total=0
+     count=0
+     try="$1"
+     apk=$(echo "$1" | cut -d: -f1)
+     if is_zip "$apk" && unzip -l "$apk" | grep -q "META-INF/APKMIRRO.SF" && unzip -l "$apk" | grep -q " info.json"; then
+        new=
+        archi=
+        dp=
+        lang=$(getprop persist.sys.locale | cut -d- -f1)
+        density=$(cmd window density | cut -d: -f2 | tr -d " ")
+        if [ -z "$lang" ]; then echo2 "apk_install: Unable to get current device language" && success=false && break; fi
+        if ! is_number "$density"; then echo2 "apk_install: Unable to get device density" && success=false && break; fi
+        [[ "$lang" != "en" ]] && lang+=" en"
+        dp_support=$(string extract '"dpis": [' ']' "$(package_extract_file info.json "" "$apk")" | tr -d ' ,"' | tr '\n' ' ')
+        if [[ "$(echo "$dp_support" | tr -d " ")" != "nodpi" ]]; then
+           for support in $dp_support; do
+              if [[ "$(get_density_int "$support")" == "$density" ]]; then dp=$density && break; fi
+           done
+           if [ -z "$dp" ]; then
+              density=$(printf "%.0f" "$(calc "$density/160")")
+              density=$(($density*160))
+              for support in $dp_support; do
+                 if [[ "$(get_density_int "$support")" == "$density" ]]; then dp=$density && break; fi
+              done
+           fi
+           [ -z "$dp" ] && dp=$(echo "$dp_support" | tr ' ' '\n' | grep -E "." | tail -n1 | tr -d " ")
+           if ! is_number "$dp"; then echo2 "apk_install: Could not get a valid dpi: $apk " && success=false && break; fi
+           dp=$(get_density_key "$dp")
+        fi
+        archi_support=$(string extract '"arches": [' ']' "$(package_extract_file info.json "" "$apk")" | tr -d ' ,"' | tr '\n' ' ')
+        for support in $archi_support; do
+           if [[ "$support" == "$ABILONG" ]]; then archi=$support && break; fi
+        done
+        if [ -z "$archi" ]; then
+           for support in $archi_support; do
+              if is_substring "$arch" "$support"; then archi=$support && break; fi
+           done
+        fi
+        if [ -z "$archi" ]; then
+           for support in $archi_support; do
+              if is_substring "$arch32" "$support"; then archi=$support && break; fi
+           done
+        fi
+        if [ -z "$archi" ]; then echo2 "apk_install: Unsupported architecture: $apk " && success=false && break; fi
+        archi=${archi/"-"/"_"}
+        for install in base $lang $dp $archi; do
+           get=$(unzip -l "$apk" | tail -n+4 | cut -c4- | grep -m1 -F ".${install}.")
+           [ -z "$get" ] && get=$(unzip -l "$apk" | tail -n+4 | cut -c4- | grep -m1 -F "${install}.")
+           [ -z "$get" ] && continue
+           [ -n "$new" ] && new+=":"
+           get=${get##* }
+           unzip -qo "$apk" "$get" -d "$TMP2"
+           if [ -f "$TMP2/$get" ]; then
+              new+="$TMP2/$get"
+           else echo2 "apk_install: Cant get \"$get\"" && success=false && break
+           fi
+        done
+        if $success; then
+           try=${try/"${apk}"/"${new}"}
+           while read split; do
+              [ -z "$split" ] && break
+              if [ ! -f "$split" ]; then
+                 package_extract_file "$split" "$TMP2/$(basename "$split")" "$apk"
+                 if is_valid "$TMP2/$(basename "$split")"; then
+                    try=${try/"${split}"/"$TMP2/$(basename "$split")"}
+                 else echo2 "Cant find: $split" && success=false && break
+                 fi
+              fi
+           done <<< $(split_string : "$try") 
+        fi
+     fi
+     $success || break
+     if is_substring : "$try"; then
+        while read split; do
+           [ -z "$split" ] && break
+           if [ ! -f "$split" ]; then echo2 "Cant find: $split" && success=false && break; fi
+           size=$(getsize "$split")
+           total=$(($total+$size))
+        done <<< $(split_string : "$try")
+        $success || break
+        id=$(pm install-create -S "$total" | grep -oE "[0-9]*")
+        if is_number "$id"; then
+           echo2 "Created session: $id: $(basename "$apk")"
+           while read split; do
+              [ -z "$split" ] && break
+              size=$(getsize "$split")
+              copy "$split" "$TMP2"
+              if pm install-write -S $size $id $count "$TMP2/$(basename "$split")" >/dev/null; then
+                 echo2 "Added: $(basename "$split")"
+              else
+                 echo2 "apk_install: Could not add: $split to $id installation" && success=false && break 
+              fi
+              count=$(($count+1))
+           done <<< $(split_string : "$try")
+           if $success; then
+              if pm install-commit $id >/dev/null; then
+                 echo2 "Installed successfully: $id session"
+              else
+                 echo2 "apk_install: CANT INSTALL SESSION: $id" && success=false
+              fi
+           fi
+        else
+           echo2 "apk_install: Cannot create a session: $try" && success=false
+        fi
+     else
+        if [ ! -f "$try" ]; then echo2 "Cant find: $try" && success=false; fi
+        $success || break
+        copy "$try" "$TMP2"
+        if pm install -r "$TMP2/$(basename "$try")" >/dev/null; then
+           echo2 "Installed successfully: $(basename "$try")"
+        else
+           echo2 "apk_install: CANT INSTALL: $try" && success=false
+        fi
+     fi
+     $success || break
+     shift;
+     [ "$1" ] && echo2 " "
+   done;
+   delete_recursive "$TMP2"
+   $success && return 0 || return 1
+}
+
+apk_install_recursive() {
+    local dir any apk ext list
+    while [ "$1" ]; do
+       dir="$1"
+       while read any; do
+          exist "$any" || break
+          ext=$(basename "$any")
+          ext=${ext##*.}
+          if [ -f "$any" ] && [[ "$ext" == "apk" || "$ext" == "apkm" ]]; then
+             apk_install "$any" || return 1
+             echo2 " "
+          elif [ -d "$any" ]; then
+             echo2 "From: $any"
+             list=
+             list=$(find "$any" -type f -name "*.apkm" | head -n1)
+             while read apk; do
+                exist "$apk" || break
+                [ -n "$list" ] && list+=":"
+                list+="$apk"
+             done <<< $(find "$any" -type f -name "*.apk")
+             if [ -n "$list" ]; then apk_install "$list" || return 1; echo2 " "
+             else echo2 "No .apk/.apkm found on: $any"
+             fi
+          fi
+       done <<< $(find "$dir" -mindepth 1 -maxdepth 1)
+       shift;
+    done
+    return 0
 }
 
 apk_pkg() {
@@ -3207,6 +3675,7 @@ apk_pkg() {
 patch_apk() {
     local current=${PWD} stock new
     if ! exist "$1" "$2"; then echo2 "patch_apk: Invalid line" && return 1; fi
+    testrw "$(dirname "$2")" || return 1
     cp -pf "$2" "$TMP"
     savestate stock "$TMP/$(basename "$2")"
     cd "$1" && zip -r "$TMP/$(basename "$2")" * >/dev/null
@@ -3493,6 +3962,7 @@ smali_kit() {
                echo "path=$dir"
                string -f "$dir" complete_extract "$line" ".end method"
             fi
+            if [ -z "$justprint" ]; then testrw "$(dirname "$dir")" || return 1; fi 
             if [ -n "$replace" ]; then
                load=$(cat "$dir")
                old=$(string complete_extract "$line" ".end method" "$load")
@@ -3579,6 +4049,7 @@ smali_kit() {
                echo "path=$dir"
                string -f "$dir" complete_extract "$line" ".end method"
             fi
+            if [ -z "$justprint" ]; then testrw "$(dirname "$dir")" || return 1; fi 
             if [ -n "$replace" ]; then
                load=$(cat "$dir")
                old=$(string complete_extract "$line" ".end method" "$load")
@@ -3760,7 +4231,7 @@ getarch() {
   if [ "$ABILONG" = "arm64-v8a" ]; then arch=arm64; arch32=arm; is64bit=true; base_lib=64; fi;
   if [ "$ABILONG" = "x86_64" ]; then arch=x64; arch32=x86; is64bit=true; base_lib=64; fi;
   echo2 "------------Device INFO------------"
-  for info in API ABI ABI2 ABILONG PROC arch arch32 max_arch is64bit chipname status encrypted slot dynamic_partitions virtual_partitions free_root free_system free_vendor di_version main_version; do
+  for info in TMP API ABI ABI2 ABILONG PROC arch arch32 max_arch is64bit chipname status encrypted slot dynamic_partitions virtual_partitions free_root free_system free_vendor di_version main_version; do
      if defined $info; then echo2 "$info=$(checkvar $info)"; fi
   done
   echo2 "-----------------------------------"
@@ -3855,7 +4326,7 @@ package_extract_file() {
    [ -n "$3" ] && local installzip="$3"
    [ ! -f "$installzip" ] && return 1
    if [[ -n "$1" && -n "$2" ]]; then
-      if [ ! -d "$(dirname "$2")" ]; then mkdir -p "$(dirname "$2")"; set_perm2 $di_uid $di_gid $di_perm_d "$(dirname "$2")"; fi
+      create_dir "$(dirname "$2")" || return 1
       unzip -qp "$installzip" "$1" > "$2"
       if exist "$2"; then set_perm2 $di_uid $di_gid $di_perm_f "$2"
       else return 1
@@ -3876,9 +4347,9 @@ package_extract_dir() {
     if [[ -n "$1" && -n "$2" ]]; then
        outfile=$(echo "$a" | sed "s|${1}|${2}|");
        if echo "$a" | grep -q '/$'; then 
-          if [ ! -d "$outfile" ]; then mkdir -p "$outfile"; set_perm2 $di_uid $di_gid $di_perm_d "$outfile"; fi
+          create_dir "$outfile" || return 1
           continue
-       elif [ ! -d "$(dirname "$outfile")" ]; then mkdir -p "$(dirname "$outfile")"; set_perm2 $di_uid $di_gid $di_perm_d "$(dirname "$outfile")"
+       else create_dir "$(dirname "$outfile")" || return 1
        fi
        unzip -qp "$installzip" "$a" > "$outfile"
        if exist "$outfile"; then set_perm2 $di_uid $di_gid $di_perm_f "$outfile"
@@ -3889,7 +4360,7 @@ package_extract_dir() {
        unzip -qp "$installzip" "$a" || return=1
     else return=1 && break
     fi
-  done <<< $(unzip -l "$installzip" | tail -n+4 | grep -o " $1.*$" | cut -c2-)
+  done <<< $(unzip -l "$installzip" | tail -n+4 | grep -o " ${1%%/}/.*$" | cut -c2-)
   return $return
 }
 
@@ -3902,7 +4373,7 @@ getblocks() {
           base=
           base=$(basename "$block")
           result=$(readlink -f "$block")
-          if defined result && exist "$result"; then
+          if defined result && exist "$result" && testvarname "$base"; then
              base=$(string lower "$base")
              setdefault "$base" "$result"
              echo2 "$base=$result"
@@ -3916,7 +4387,7 @@ getblocks() {
           base=
           base=$(basename "$block")
           result=$(readlink -f "$block")
-          if defined result && exist "$result" && ! is_substring "$result" "$all_partitions"; then
+          if defined result && exist "$result" && testvarname "$base" && ! is_substring "$result" "$all_partitions"; then
              base=$(string lower "$base")
              setdefault "$base" "$result"
              echo2 "$base=$result"
@@ -3931,7 +4402,7 @@ getblocks() {
               base=
               base=$(basename "$mapper")
               result=$(readlink -f "$mapper")
-              if defined result && exist "$result" && ! is_substring "$result" "$all_partitions"; then
+              if defined result && exist "$result" && testvarname "$base" && ! is_substring "$result" "$all_partitions"; then
                  base=$(string lower "$base")
                  setdefault "$base" "$result"
                  echo2 "$base=$result"
@@ -3947,7 +4418,7 @@ getblocks() {
               base=
               base=$(basename "$bd")
               result=$(readlink -f "$bd")
-              if defined result && exist "$result" && ! is_substring "$result" "$all_partitions"; then
+              if defined result && exist "$result" && testvarname "$base" && ! is_substring "$result" "$all_partitions"; then
                  base=$(string lower "$base")
                  setdefault "$base" "$result"
                  echo2 "$base=$result"
@@ -4196,9 +4667,10 @@ ch_con() {
   shift
   while [ "$1" ]; do
     [[ "$con" == "$(get_context "$1")" ]] && shift && continue
+    testrw "$(dirname "$1")" || return 1
     echo2 "set_context: $con in $1"
     chcon -h $con "$1" 2>/dev/null || chcon $con "$1"
-    shift
+    shift;
   done
   return $return
 }
@@ -4235,6 +4707,7 @@ ch_con_recursive() {
     shift $s
     while [ "$1" ]; do
       if [ ! -d "$1" ]; then echo2 "CANT FIND: $1" && shift && continue; fi
+      testrw "$1" || return 1
       [ -n "$dcon" ] && ( find "$1" -type d | while read folder; do ch_con $dcon "$folder"; done)
       [ -n "$fcon" ] && ( find "$1" -type f -o -type l | while read file; do ch_con $fcon "$file"; done)
       shift;
@@ -4247,19 +4720,27 @@ set_perm() {
   [ -n "$2" ] && gid=$2 || return 1
   [ -n "$3" ] && mod=$3 || return 1
   shift 3
-  chown "$uid:$gid" "$@" 2>/dev/null || chown "$uid.$gid" "$@"
-  chmod "$mod" "$@"
+  while [ "$1" ]; do
+     testrw "$(dirname "$1")" || return 1
+     chown "$uid:$gid" "$1" 2>/dev/null || chown "$uid.$gid" "$1"
+     chmod "$mod" "$1"
+     shift;
+  done;
 }
 
 set_perm2() {
   #Ensure this format
-  local uid gid fmod
+  local uid gid mod
   [ -n "$1" ] && uid=$1  || return 1
   [ -n "$2" ] && gid=$2 || return 1
-  [ -n "$3" ] && fmod=$3 || return 1
+  [ -n "$3" ] && mod=$3 || return 1
   shift 3
-  chown "$uid:$gid" "$@" 2>/dev/null || chown "$uid.$gid" "$@"
-  chmod "$fmod" "$@"
+  while [ "$1" ]; do
+     testrw "$(dirname "$1")" || return 1
+     chown "$uid:$gid" "$1" 2>/dev/null || chown "$uid.$gid" "$1"
+     chmod "$mod" "$1"
+     shift;
+  done;
 }
 
 set_perm_recursive() {
@@ -4271,6 +4752,7 @@ set_perm_recursive() {
   shift 4
   while [ "$1" ]; do
     if [ ! -d "$1" ]; then echo2 "CANT FIND: $1" && shift && continue; fi
+    testrw "$1" || return 1
     chown -R $uid:$gid "$1" 2>/dev/null || chown -R $uid.$gid "$1"
     chmod -R $fmod "$1"
     find "$1" -type l -exec chmod $fmod {} +;
@@ -4289,6 +4771,7 @@ set_perm_recursive2() {
   shift 4
   while [ "$1" ]; do
     if [ ! -d "$1" ]; then echo2 "CANT FIND: $1" && shift && continue; fi
+    testrw "$1" || return 1
     chown -R $uid:$gid "$1" 2>/dev/null || chown -R $uid.$gid "$1"
     chmod -R $fmod "$1"
     find "$1" -type l -exec chmod $fmod {} +;
@@ -4348,7 +4831,7 @@ restoreperm() {
             if [ -n "$perm" ]; then
                [[ "$perm" == "$(get_all_perm "$huh")" ]] && continue
                echo2 "set_perm: $perm in $huh"
-               set_perm2 $perm "$huh"
+               set_perm2 $perm "$huh" || return 1
             else echo2 "set_perm: There is no saved permission for $huh"
             fi
          done
@@ -4357,7 +4840,7 @@ restoreperm() {
          if [ -n "$perm" ]; then
             [[ "$perm" == "$(get_all_perm "$1")" ]] && shift && continue
             echo2 "set_perm: $perm in $1"
-            set_perm2 $perm "$1"
+            set_perm2 $perm "$1" || return 1
          else echo2 "set_perm: There is no saved permission for $1"
          fi
       fi
@@ -4420,14 +4903,14 @@ restorecontext() {
          find -L "$1" -mindepth 1 | while read huh; do
             context=$(get_file_prop "$list" "$huh" 2>/dev/null)
             if [ -n "$context" ]; then
-               ch_con $context "$huh"
+               ch_con $context "$huh" || return 1
             else echo2 "set_context: There is no saved context for $huh"
             fi
          done
       elif [ -f "$1" ]; then
          context=$(get_file_prop "$list" "$1" 2>/dev/null)
          if [ -n "$context" ]; then
-            ch_con $context "$1"
+            ch_con $context "$1" || return 1
          else echo2 "set_context: There is no saved context for $1"
          fi
       fi
@@ -4771,7 +5254,7 @@ checksuper() {
   #checksuper "SUPER partition/image"
   [ "$(superrepack teSt >/dev/null; echo $?)" == "100" ] && return 1
   [ -z "$1" ] && return 1
-  if ! superrepack "$1" noneeded 2>/dev/null | grep -q "This is not super image"; then true; else false; fi
+  if ! is_substring "This is not super image" "$(superrepack "$1" noneeded 2>/dev/null)"; then true; else false; fi
 }
 
 start_loop() {
@@ -5110,7 +5593,7 @@ mount_all_old() {
           for part in system_ext vendor product odm; do
              block=/dev/block/mapper/$part$slot
              if [ -e $block ]; then
-                [ -d /$part ] || mkdir -p /$part
+                setup_mountpoint /$part
                 mount -o ro -t auto $block /$part
              fi
           done
@@ -5255,10 +5738,10 @@ dynamic_install(){
      undefined f && break
      inst_dir=${f/"$origin"/"$2"}
      if [ -d "$f" ]; then
-        if [ ! -d "$inst_dir" ]; then mkdir -p "$inst_dir"; set_perm2 $di_uid $di_gid $di_perm_d "$inst_dir"; fi
+        create_dir "$inst_dir" || return 1
         continue
      fi
-     inject "$f" "$(dirname "$inst_dir")"
+     inject "$f" "$(dirname "$inst_dir")" || return 1
    done <<< $(find -L "$origin" -mindepth 1)
 }
 	
@@ -5267,13 +5750,11 @@ inject() {
   file=$(basename "$1")
   dest="$2/$file"
   [ ! -f "$1" ] && return 1
-  if [ ! -d "$2" ]; then mkdir -p "$2"; fi
-  if install -D "$1" "$dest" >/dev/null 2>&1; then
-     set_perm2 $di_uid $di_gid $di_perm_f "$dest"
-     set_perm2 $di_uid $di_gid $di_perm_d "$2"
-  elif cp -prf "$1" "$dest"; then
-     set_perm2 $di_uid $di_gid $di_perm_f "$dest"
-     set_perm2 $di_uid $di_gid $di_perm_d "$2"
+  create_dir "$2" || return 1
+  testrw "$2" || return 1
+  if install -D "$1" "$dest" >/dev/null 2>&1 || cp -prf "$1" "$dest"; then
+     if ! set_perm2 $di_uid $di_gid $di_perm_f "$dest"; then echo2 "inject: Cant set permissions in: $dest file" && return=1; fi
+     if ! set_perm2 $di_uid $di_gid $di_perm_d "$2"; then echo2 "inject: Cant set permissions in: $2 folder" && return=1; fi
   else
      echo2 "Cant inject: $file" && return=1
   fi
@@ -5453,7 +5934,6 @@ fi
 
 #CUSTOM MODES (Generic Setup)
 if [[ "$custom_mode" == "true" ]]; then
-   setenforce 0 2>/dev/null
    
    #Global vars
    if defined TMPDIR Dynamic_Setup; then export TMP="$TMPDIR"
@@ -5500,19 +5980,15 @@ if [[ "$custom_mode" == "true" ]]; then
       copy extra.zip "$extra"
    fi
    
-   #Getting file_types.config (Optional)
-   if exist "$MYPATH/configs/file_types.config"; then
-      copy "$MYPATH/configs/file_types.config" "$l"
-   elif exist configs/file_types.config; then
-      copy configs/file_types.config "$l"
-   fi
-   
-   #Getting units.config (Optional)
-   if exist "$MYPATH/configs/units.config"; then
-      copy "$MYPATH/configs/units.config" "$l"
-   elif exist configs/units.config; then
-      copy configs/units.config "$l"
-   fi
+   #Getting configs
+   for config in file_types units; do
+      if exist "$MYPATH/configs/${config}.config"; then
+         copy "$MYPATH/configs/${config}.config" "$l"
+      elif exist configs/${config}.config; then
+         copy configs/${config}.config "$l"
+      fi
+   done
+   unset config
    
    #Permissions
    chmod 755 "$bb" "$bin" "$extra" 2>/dev/null
@@ -5603,6 +6079,13 @@ apex_mount=$(getdefault "$TMP/updater-script" apex_mount)
 magisk_support=$(getdefault "$TMP/updater-script" magisk_support)
 extraction_speed=$(getdefault "$TMP/updater-script" extraction_speed)
 permissions=$(getdefault "$TMP/updater-script" permissions)
+import_addons=$(getdefault "$TMP/updater-script" import_addons)
+echo2 "---------Installer Configs----------"
+for info in devices apex_mount magisk_support import_addons extraction_speed permissions; do
+   if defined $info; then echo2 "$info=$(checkvar $info)"; else echo2 "$info undefined!"; fi
+done
+echo2 "-----------------------------------"
+unset info
 if [[ -n "$devices" && "$devices" != "off" ]]; then
     dcount=false
     setdefault may "
@@ -5615,6 +6098,7 @@ if [[ -n "$devices" && "$devices" != "off" ]]; then
     $(grep_cmdline androidboot.em.model 2>/dev/null) 
     "
     while read huh; do
+       $dcount && break
        undefined huh && continue
        while read ugu; do
          undefined ugu && continue
@@ -5625,8 +6109,8 @@ if [[ -n "$devices" && "$devices" != "off" ]]; then
          else
             echo2 "Device checking: [$ugu] != [$huh]"
          fi
-       done <<< $(split_string '' "$may")
-    done <<< $(split_string : "$devices")
+       done <<< $(split_string : "$devices" | sort -bu)
+    done <<< $(echo "$may" | sort -bu)
     if ! $dcount; then abort " -- Incompatible device: Its only for $(string force -r replace : ' and ' "$devices")"; fi;
 fi
 unset may huh ugu dcount
@@ -5637,15 +6121,21 @@ package_extract_dir META-INF/addons "$addons"
 #Ensure/Check new default permissions
 setdefault permissions "$permissions"
 
+#Importing addons(.sh) if needed
+if [[ "$import_addons" == "on" ]]; then
+    while read addon; do
+       if exist "$addon"; then
+          echo2 "- Importing $(basename "$addon")"
+          . "$addon"
+       fi
+    done <<< $(find "$addons" -mindepth 1 -maxdepth 1 -type f -name "*.sh")
+    unset addon
+fi
+
 if $BOOTMODE && [[ "$magisk_support" != "on" ]]; then
    if ! exist "$TMP"; then abort "FATAL ERROR: Cant find $TMP"; fi
    echo2 "----------------Running SCRIPTs------------"
    . "$TMP/updater-script"
-   if [[ "$run_addons" == "on" ]]; then
-     while read addon; do
-        if exist "$addon"; then . "$addon"; fi
-     done <<< $(find "$addons" -mindepth 1 -maxdepth 1 -type f -name "*.sh")
-   fi
    remove_tmp
    echo2 "-------------------------------------------"
    exit 0
@@ -5654,11 +6144,6 @@ fi
 if ! $BOOTMODE; then
 echo2 "----------------Running SCRIPTs------------"
 . "$TMP/updater-script"
-if [[ "$run_addons" == "on" ]]; then
-    while read addon; do
-       if exist "$addon"; then . "$addon"; fi
-    done <<< $(find "$addons" -mindepth 1 -maxdepth 1 -type f -name "*.sh")
-fi
 remove_tmp
 restore_env
 echo2 "-------------------------------------------"
@@ -5808,11 +6293,7 @@ install_module() {
   rmdir -p $MODPATH
 
   cd /
-  if [[ "$run_addons" == "on" ]]; then
-    while read addon; do
-       if exist "$addon"; then . "$addon"; fi
-    done <<< $(find "$addons" -mindepth 1 -maxdepth 1 -type f -name "*.sh")
-  fi
+  
   $BOOTMODE || recovery_cleanup
   rm -rf $TMPDIR
 

@@ -32,8 +32,19 @@ if ! exist "$FILE"; then
    #Mount
    ui_print " Unmounting all partitions... "
    umount_all
-   ui_print " Installing August patch kernel... "
-   update_zip boot.img $(find_block boot)
+   ui_print " ___________________________________________________ "
+      ui_print " Do you want to flash Sixteen kernel? "
+      ui_print " ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ "
+      ui_print "    this will keep magisk installed unlike default  "
+      ui_print " ___________________________________________________ "
+      ui_print " ---------Volume up = Yes | Volume down = No-------- "
+      ui_print " ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ "
+    if $yes; then
+    flash_zip log_name "kernel.zip" print
+    else
+          ui_print " Installing September patch kernel... "
+          update_zip boot.img $(find_ block boot)
+   fi
    ui_print " Installing ROM... "
    update_zip -xz super.img.xz $(find_block super)
    ui_print " Super img Installed. press any volume button     " 
@@ -215,7 +226,7 @@ else
       ui_print " ___________________________________________________ "
       ui_print " Do you want to add Samsung Free, Bixby and AR Stickers? "
       ui_print " ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ "
-      ui_print " Note: This is the last question I promise lol       "
+      ui_print "        "
       ui_print " ___________________________________________________ "
       ui_print " ---------Volume up = Yes | Volume down = No-------- "
       ui_print " ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ "
@@ -237,19 +248,6 @@ else
          delete_recursive /system/priv-app/SystemUIBixby2
          delete_recursive /system/app/MinusOnePage
       fi
-          ui_print " ___________________________________________________ "
-      ui_print " Do you want to flash Sixteen kernel? "
-      ui_print " ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ "
-      ui_print "      "
-      ui_print " ___________________________________________________ "
-      ui_print " ---------Volume up = Yes | Volume down = No-------- "
-      ui_print " ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ "
-      if $yes; then
-      flash_zip log_name "extras/kernel.zip" print
-
-      else
-          ui_print "skipping "
-      fi
       ui_print " ___________________________________________________ "
       ui_print " Do you want to install magisk? "
       ui_print " ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ "
@@ -258,7 +256,7 @@ else
       ui_print " ---------Volume up = Yes | Volume down = No-------- "
       ui_print " ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ "
       if $yes; then
-         flash_zip log_name "extras/magisk.zip" print
+         flash_zip log_name "magisk.zip" print
       else
          ui_print "skipping "
       fi
@@ -284,8 +282,8 @@ else
    set_metadata /vendor/etc/midas/SRIBMidas_aiBLURDETECT_Stage2_FP32_V130.caffemodel capabilities 0x0 selabel u:object_r:vendor_configs_file:s0
    set_metadata /vendor/etc/midas/SRIBMidas_aiDEBLUR_INT16_V0132_sm7325_snpe1502.dlc capabilities 0x0 selabel u:object_r:vendor_configs_file:s0
    set_metadata /vendor/etc/midas/midas_config.json capabilities 0x0 selabel u:object_r:vendor_configs_file:s0
-   delete "$FILE"
    #Unmount
+   delete "$FILE"
    ui_print " Unmounting partitions... "
    umount_all
    #Finished

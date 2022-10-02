@@ -30,6 +30,8 @@ if ! exist "$FILE"; then
    create_file "$FILE"
    ui_print " Installing Super image (step 1)... "
    #Mount
+   ui_print " Unmounting all partitions... "
+   umount_all
    ui_print " ___________________________________________________ "
       ui_print " Do you want to flash Sixteen kernel? "
       ui_print " ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ "
